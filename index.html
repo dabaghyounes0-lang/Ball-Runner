@@ -61,3 +61,28 @@
     </script>
 </body>
 </html>
+// كود تفعيل واجهة دفع النجوم عند ضغط زر الشراء
+function payWithTelegramStars() {
+    // التأكد من أن اللعبة تفتح داخل تيليجرام
+    if (window.Telegram && window.Telegram.WebApp) {
+        
+        Telegram.WebApp.openInvoice({
+            url: "https://t.me", // رابط تطبيقك المصغر
+            title: "Premium Luxury Watch Face ⌚", // اسم المنتج
+            description: "Unlock the exclusive full digital watch face for your screen!", // الوصف
+            currency: "XTR", // عملة النجوم الموحدة
+            prices: [{ label: "Watch Edition", amount: 50 }] // السعر: 50 نجمة
+        }, function(status) {
+            if (status === 'paid') {
+                alert('Thank you! Premium Watch Unlocked successfully! 🎉');
+                // تضع هنا الكود الذي يفتح ميزات الساعة المطورة للمستخدم
+            } else {
+                alert('Payment was not completed.');
+            }
+        });
+
+    } else {
+        alert('Please open this game inside Telegram to pay with Stars.');
+    }
+}
+
