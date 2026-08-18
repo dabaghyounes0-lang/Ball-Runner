@@ -1,64 +1,308 @@
-8<!DOCTYPE html>
-<html lang="ar">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ball Runner 2D</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة الطائر الإلكتروني - Cyber Bird</title>
     <style>
-        body { margin: 0; background: #111; color: white; text-align: center; font-family: Arial, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        #gameCanvas { background: #222; border: 2px solid #00ff66; display: block; }
+        body {
+            margin: 0; padding: 0;
+            background: #090a10;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 35px rgba(255, 0, 127, 0.25);
+            border-radius: 16px;
+            overflow: hidden;
+            background: #111322;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #141628, #090a10);
+        }
+        .ui-layer {
+            position: absolute; top: 25px; left: 25px; right: 25px;
+            display: flex; justify-content: space-between;
+            pointer-events: none; font-size: 22px; font-weight: 800;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        .score-box { color: #ff007f; filter: drop-shadow(0 0 5px #ff007f); }
+        .high-box { color: #00f2fe; filter: drop-shadow(0 0 5px #00f2fe); }
+        #menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(9, 10, 16, 0.88);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: all 0.3s ease; z-index: 10;
+        }
+        .btn {
+            background: linear-gradient(45deg, #ff007f, #7928ca);
+            border: none; color: white; padding: 14px 35px;
+            font-size: 18px; font-weight: bold; border-radius: 30px;
+            cursor: pointer; box-shadow: 0 4px 20px rgba(255, 0, 127, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s; margin-top: 25px;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px rgba(255, 0, 127, 0.7);
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            background: linear-gradient(45deg, #ff007f, #00f2fe);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-size: 42px; text-transform: uppercase; letter-spacing: 2px;
+        }
+        .instructions { color: #8a8fa3; font-size: 15px; text-align: center; max-width: 80%; line-height: 1.6; }
+        .hide { display: none !important; opacity: 0; pointer-events: none; }
     </style>
 </head>
 <body>
-    <h2 id="scoreText">النقاط: 0</h2>
-    <canvas id="gameCanvas" width="400" height="300"></canvas>
-    <p>اضغط على الشاشة لتقفز الكرة</p>
 
+    <div id="game-container">
+        <div class="ui-layer">
+            <div class="score-box">النقاط: <span id="score">0</span></div>
+            <div class="high-box">أعلى نتيجة: <span id="high-score">0</span></div>
+        </div>
+        
+        <div id="menu">
+            <h1 id="menu-title">Cyber Bird</h1>
+            <p class="instructions" id="menu-text">اضغط على زر المسافة (Spacebar) أو انقر داخل الشاشة لجعل الطائر يرتفع. تجنب الحواجز المتوهجة النيون!</p>
+            <button class="btn" id="start-btn">ابدأ الطيران</button>
+        </div>
+
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+    </div>
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const startBtn = document.getElementById('start-btn');
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('high-score');
+        const menuTitle = document.getElementById('menu-title');
+        const menuText = document.getElementById('menu-text');
 
-        let ballY = 200, ballVelocity = 0, gravity = 0.6;
-        let obstacleX = 400, obstacleSpeed = 4, score = 0, isGameOver = false;
+        let score = 0;
+        let highScore = localStorage.getItem('birdHighScore') || 0;
+        highScoreEl.textContent = highScore;
+        let gameActive = false;
+        let frameCount = 0;
+        let screenShake = 0;
 
-        function draw() {
-            if (isGameOver) return;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // فيزياء الطائر
+        const bird = {
+            x: 100, y: 300, radius: 14,
+            gravity: 0.35, lift: -7.5, velocity: 0,
+            color: '#ff007f', glow: '#ff007f', angle: 0
+        };
 
-            // تحريك وجاذبية الكرة
-            ballVelocity += gravity;
-            ballY += ballVelocity;
-            if (ballY > 260) { ballY = 260; ballVelocity = 0; }
+        let pipes = [];
+        let particles = [];
 
-            // رسم الكرة
-            ctx.fillStyle = "#ff3333";
-            ctx.beginPath(); ctx.arc(50, ballY, 15, 0, Math.PI * 2); ctx.fill();
-
-            // تحريك العقبة
-            obstacleX -= obstacleSpeed;
-            if (obstacleX < -20) { obstacleX = 400; score += 10; obstacleSpeed += 0.3; document.getElementById("scoreText").innerText = "النقاط: " + score; }
-
-            // رسم العقبة
-            ctx.fillStyle = "#ffcc00";
-            ctx.fillRect(obstacleX, 240, 20, 40);
-
-            // كشف الاصطدام
-            if (obstacleX > 25 && obstacleX < 65 && ballY > 225) {
-                isGameOver = true;
-                ctx.fillStyle = "#ff3333"; ctx.font = "30px Arial"; ctx.fillText("انتهت اللعبة!", 120, 150);
-                ctx.font = "20px Arial"; ctx.fillText("اضغط لتلعب مجدداً", 120, 190);
+        // المدخلات والتحكم
+        window.addEventListener('keydown', (e) => {
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                flap();
             }
-            requestAnimationFrame(draw);
+        });
+        canvas.addEventListener('mousedown', flap);
+
+        function flap() {
+            if (!gameActive) return;
+            bird.velocity = bird.lift;
+            // جزيئات النفاثة عند القفز
+            createParticles(bird.x - 10, bird.y, '#00f2fe', 6);
         }
 
-        window.addEventListener("pointerdown", () => {
-            if (isGameOver) {
-                ballY = 200; ballVelocity = 0; obstacleX = 400; obstacleSpeed = 4; score = 0; isGameOver = false;
-                document.getElementById("scoreText").innerText = "النقاط: 0"; draw();
-            } else if (ballY === 260) { ballVelocity = -12; }
-        });
-        draw();
+        startBtn.addEventListener('click', initGame);
+
+        function createParticles(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.7) * 4 - 2,
+                    vy: (Math.random() - 0.5) * 4,
+                    radius: Math.random() * 3 + 1,
+                    color: color, alpha: 1,
+                    decay: Math.random() * 0.03 + 0.015
+                });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy; p.alpha -= p.decay;
+                if (p.alpha <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function generatePipe() {
+            const gap = 150; // الفتحة بين الأنابيب
+            const minHeight = 50;
+            const maxHeight = canvas.height - gap - minHeight;
+            const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+            
+            pipes.push({
+                x: canvas.width,
+                top: topHeight,
+                bottom: canvas.height - topHeight - gap,
+                width: 65,
+                speed: 3,
+                passed: false,
+                color: '#00f2fe'
+            });
+        }
+
+        function initGame() {
+            score = 0; frameCount = 0; screenShake = 0;
+            scoreEl.textContent = score;
+            bird.y = 300; bird.velocity = 0; bird.angle = 0;
+            pipes = []; particles = [];
+            
+            generatePipe();
+            menu.classList.add('hide');
+            gameActive = true;
+            animate();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('birdHighScore', highScore);
+                highScoreEl.textContent = highScore;
+            }
+            menuTitle.textContent = "تحطم الطائر!";
+            menuText.innerHTML = `النقاط التي جمعتها: <b style="color:#ff007f">${score}</b><br>حاول مجدداً لتجاوز عقبات النيون!`;
+            startBtn.textContent = "طيران جديد";
+            menu.classList.remove('hide');
+        }
+
+        function animate() {
+            if (!gameActive) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // تأثير اهتزاز الشاشة عند التصادم
+            ctx.save();
+            if (screenShake > 0) {
+                ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+                screenShake *= 0.9;
+                if (screenShake < 0.5) screenShake = 0;
+            }
+
+            // تحديث حركة الطائر وزاوية ميلانه
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+            bird.angle = Math.min(Math.PI / 4, Math.max(-Math.PI / 7, bird.velocity * 0.06));
+
+            // توليد الأنابيب كل 110 إطارات لضمان مسافات ثابتة ومتناسقة
+            frameCount++;
+            if (frameCount % 110 === 0) {
+                generatePipe();
+            }
+
+            // معالجة الأنابيب ورسمها
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                let p = pipes[i];
+                p.x -= p.speed;
+
+                // رسم الأنبوب العلوي بالتوهج
+                ctx.save();
+                ctx.shadowBlur = 15; ctx.shadowColor = p.color;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.roundRect(p.x, 0, p.width, p.top, [0, 0, 8, 8]);
+                ctx.fill();
+
+                // رسم الأنبوب السفلي
+                ctx.beginPath();
+                ctx.roundRect(p.x, canvas.height - p.bottom, p.width, p.bottom, [8, 8, 0, 0]);
+                ctx.fill();
+                ctx.restore();
+
+                // التحقق من اصطدام دقة الطائر مع الأنابيب
+                if (bird.x + bird.radius > p.x && bird.x - bird.radius < p.x + p.width) {
+                    if (bird.y - bird.radius < p.top || bird.y + bird.radius > canvas.height - p.bottom) {
+                        screenShake = 12;
+                        createParticles(bird.x, bird.y, '#ff007f', 25);
+                        setTimeout(gameOver, 200);
+                        return;
+                    }
+                }
+
+                // حساب النقاط عند تجاوز الأنبوب بنجاح
+                if (!p.passed && p.x + p.width < bird.x) {
+                    p.passed = true;
+                    score++;
+                    scoreEl.textContent = score;
+                    createParticles(p.x + p.width, p.top + 75, '#ffb300', 8); // جزيئات احتفالية
+                }
+
+                // حذف الأنابيب خارج الشاشة لتوفير الذاكرة
+                if (p.x + p.width < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+
+            // حدود السقف والأرضية
+            if (bird.y + bird.radius >= canvas.height || bird.y - bird.radius <= 0) {
+                screenShake = 12;
+                createParticles(bird.x, bird.y, '#ff007f', 25);
+                setTimeout(gameOver, 200);
+                return;
+            }
+
+            // تحديث ورسم الجزيئات الخلفية
+            updateParticles();
+            drawParticles();
+
+            // رسم الطائر النيوني المتطور
+            ctx.save();
+            ctx.translate(bird.x, bird.y);
+            ctx.rotate(bird.angle);
+            ctx.shadowBlur = 20; ctx.shadowColor = bird.glow;
+            
+            // جسم الطائر (تدرج نيون دائرى)
+            let grad = ctx.createRadialGradient(0, 0, 2, 0, 0, bird.radius);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(1, bird.color);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, bird.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // عين الطائر الإلكترونية المتوهجة
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(5, -4, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+            requestAnimationFrame(animate);
+        }
     </script>
 </body>
 </html>
+
 
